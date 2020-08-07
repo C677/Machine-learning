@@ -1,11 +1,11 @@
 import os
 import numpy as np
 import torch
+from engine import train_one_epoch, evaluate
 import torch.utils.data
 from PIL import Image, ImageFile
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from engine import train_one_epoch, evaluate
 import utils
 import transforms as T
 import pandas as pd
@@ -22,6 +22,8 @@ ROI(물체가 있을지도 모르는 위치의 후보 영역) 제안 -> ROI에 �
 따라서, 느리지만 성능은 좋음
 """
 
+sample_root = 'C:\\Users\\hyoj_\\OneDrive\\Desktop\\sample\\'
+
 def get_instance_segmentation_model(num_classes):
     # load an instance segmentation model pre-trained on COCO
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
@@ -36,7 +38,7 @@ def get_instance_segmentation_model(num_classes):
 class OpenDataset(torch.utils.data.Dataset):
 # 데이터셋을 생성하고 Dataloader로 데이터셋을 불러오는 클래스
 # height와 width는 resize할 크기, transforms는 이미지 전처리(좌우 변환 등)를 의미
-    def __init__(self, root, height, width, transforms=None):
+    def __init__(self, root, df_path, height, width, transforms=None):
         self.root = root
         self.transforms = transforms
         self.height = height
@@ -44,7 +46,7 @@ class OpenDataset(torch.utils.data.Dataset):
         self.image_info = collections.defaultdict(dict)
 
         lines = []
-        with open(filename, 'r') as f:
+        with open(df_path, 'r') as f:
             csvreader = csv.reader(f)
             for line in csvreader:
                 lines.append(line)
@@ -53,6 +55,7 @@ class OpenDataset(torch.utils.data.Dataset):
         counter = 0
         for i in lines:
             filename, minX, maxX, minY, maxY, classname = i
+            if filename.split('.')[-1] is not 'png' : filename += '.png'
             self.image_info[counter]['filename'] = filename
             self.image_info[counter]['box'] = [float(minX),float(maxX),float(minY),float(maxY)]
             # 0은 background를 의미
@@ -63,9 +66,9 @@ class OpenDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         # load images ad masks
-        img_path = os.path.join(self.root, "PNGImages", self.image_info[idx]['filename'])
+        img_path = os.path.join(self.root, self.image_info[idx]['filename'])
         img = Image.open(img_path).convert("RGB")
-        img = img.resize((self.width, self.height), resample=Image.BILINEAR)
+        #img = img.resize((self.width, self.height), resample=Image.BILINEAR)
         info = self.image_info[idx]
         
         # note that we haven't converted the mask to RGB,
@@ -91,15 +94,21 @@ class OpenDataset(torch.utils.data.Dataset):
         return img, target
  
     def __len__(self):
-        return len(self.imgs)
+        return len(self.image_info)
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-num_classes = 4
+num_classes = 3
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-dataset_train = OpenDataset("../input/train/", "../input/train.csv", 128, 128, transforms=None)
- 
+dataset_train = OpenDataset(sample_root,sample_root+'annotations.csv', 512, 512, transforms=None)
+dataset_test = OpenDataset(sample_root,sample_root+'annotations.csv', 512, 512, transforms=None)
+
+torch.manual_seed(1)
+indices = torch.randperm(len(dataset_train)).tolist()
+dataset_train = torch.utils.data.Subset(dataset_train, indices[:-3])
+dataset_test = torch.utils.data.Subset(dataset_test, indices[-12:])
+
 # get the model using our helper function
 model = get_instance_segmentation_model(num_classes)
 # move model to the right device
@@ -108,7 +117,11 @@ model.to(device)
 data_loader = torch.utils.data.DataLoader(
     dataset_train, batch_size=4, shuffle=True, num_workers=8,
     collate_fn=utils.collate_fn)
- 
+
+data_loader_test = torch.utils.data.DataLoader(
+    dataset_test, batch_size=1, shuffle=False, num_workers=4,
+    collate_fn=utils.collate_fn)
+
 # construct an optimizer
 params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(params, lr=0.005,
@@ -128,6 +141,6 @@ for epoch in range(num_epochs):
     # update the learning rate
     lr_scheduler.step()
     # evaluate on the test dataset
-    #evaluate(model, data_loader_test, device=device)
+    evaluate(model, data_loader_test, device=device)
 
 torch.save(model.state_dict(), "model.pth")
