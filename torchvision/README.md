@@ -11,7 +11,7 @@ python train.py
 
 ## execute at Colab notebook
 ```
-torchLibrary.ipynb
+train.ipynb
 ```
 - unzip ```sample``` file
-- edit ```sample_root``` in train.py
+- edit ```train_root```, ```val_root``` and ```test_root``` in train.ipynb
