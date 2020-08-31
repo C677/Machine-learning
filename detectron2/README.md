@@ -1,26 +1,27 @@
-#The model using detectron2
+# The model using Detectron2
 
-We will conduct machine learning experiment through Faster R-CNN provided by [detectron2 model zoo](https://github.com/facebookresearch/detectron2/blob/master/MODEL_ZOO.md).
+We will conduct machine learning experiment through Faster R-CNN provided by [Detectron2 model zoo](https://github.com/facebookresearch/detectron2/blob/master/MODEL_ZOO.md).
 To speed up time of train and evaluate, we use Colab's GPU.
 
 ### 1. Set up the Colab environment
 
 - 1) First, we need to enable GPUs for the notebook :
-
+```
 Navigate to Edit → Notebook Settings
 
 Select GPU from the Hardware Accelerator drop-down
+```
 
-        2) Install dependencies and detectron2 :
-
+- 2) Install dependencies and Detectron2 :
+```
 !pip install -U torch==1.5 torchvision==0.6 -f https://download.pytorch.org/whl/cu101/torch_stable.html
 !pip install cython pyyaml==5.1
 !pip install -U 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 !pip install detectron2==0.1.3 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu101/torch1.5/index.html
+```
+  Now, you can do all necessary imports
 
-
-        Now, you can do all necessary imports
-
+```
 import os
 # detectron2 logger 
 import detectron2
@@ -42,20 +43,18 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
 from detectron2.structures import BoxMode
+```
 
-        3) Mount google drive to Colab :
-
+- 3) Mount google drive to Colab :
+```
 from google.colab import drive
 drive.mount('/content/drive')
         When we do this, our current directory becomes '/content/drive/My Drive/'.
+```
 
+### 2. Define the custom Dataset
 
-
-
-
-2. Define the custom Dataset
-
-  we want to use a custom dataset, so we need to register our dataset(CT images, information of RoI).
+we want to use a custom dataset, so we need to register our dataset(CT images, information of RoI).
 
 we load the original dataset into list[dict] with a specification similar to COCO’s json annotations.
 
@@ -80,8 +79,8 @@ we register our dataset through DatasetCatalog.register, so we also add its corr
 
 For example, below is a part of our train/val.json and code to register train/val data.
 
-- train/val.json
-
+-- train/val.json
+```
 "1.3.6.1.4.1.14519.5.2.1.6655.2359.102500633407588554681658808214.png": {
         "image_id": 0,
         "filename": "1.3.6.1.4.1.14519.5.2.1.6655.2359.102500633407588554681658808214.png",
@@ -102,10 +101,10 @@ For example, below is a part of our train/val.json and code to register train/va
     }
 bbox_mode :0 means BoxMode.XYXY_ABS
  category_id = 0 is cancer,  category_id = 1 is covid, and category_id = 2 is nodules.
+```
 
-
-- register train/val/test data
-
+-- register train/val/test data
+```
 def get_diseases_dicts(imgdir, fn):
   json_file = os.path.join(imgdir, fn)
   with open(json_file) as f:
@@ -138,11 +137,12 @@ for d in ["train", "val"]:
     MetadataCatalog.get("diseases/" + d).set(thing_classes=["cancer", "covid", "nodules"])
 dieases_metadata = MetadataCatalog.get("diseases/train")
 We created get_dieases_dicts(imgdir, fn) function to match the format in which data set information(train/val/test.json) is loaded in detectron2. 
-
+```
 
 
 If you want to make sure the data is loaded properly...
 
+```
 import random
 import matplotlib.pyplot as plt
 %matplotlib inline
@@ -153,12 +153,12 @@ for d in random.sample(dataset_dicts, 3):
     visualizer = Visualizer(img[:, :, ::-1], metadata=diseases_metadata, scale=0.8)
     vis = visualizer.draw_dataset_dict(d)
     cv2_imshow(vis.get_image()[:, :, ::-1])
+```
 
 
 
-
-3. Train the model (ex. 3 epochs)
-
+### 3. Train the model (ex. 3 epochs)
+```
 from detectron2.engine import DefaultTrainer
 from detectron2.config import get_cfg
 
@@ -184,8 +184,9 @@ os.makedirs(cfg.OUTPUT_DIR, exist_ok=True) # save the model
 trainer = DefaultTrainer(cfg) 
 trainer.resume_or_load(resume=False)
 trainer.train()
-We use faster_rcnn_R_50_FPN_3x.yaml and also use faster_rcnn_X_101_32x8d_FPN_3x.yaml. 
+```
 
+We use faster_rcnn_R_50_FPN_3x.yaml and also use faster_rcnn_X_101_32x8d_FPN_3x.yaml. 
 When training is finished, the model(model_final.pth) is saved on this path, cfg.OUTPUT_DIR.
 
 
@@ -198,25 +199,24 @@ How to calculate 'num of epochs'...
       num_of_epochs = MAX_ITER / one_epoch
 
 
-
 * we have 10989 datas for training so MAX_ITER is 8234 for 3 epochs
 
 
-4. Test the model
+### 4. Test the model
 
-        1) Load the model
-
+- 1) Load the model
+```
 cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, "model_final.pth")
 cfg.MODEL.RETINANET.SCORE_THRESH_TEST = 0.7   # set the testing threshold for this model
 predictor = DefaultPredictor(cfg)
+```
 Now it's time to test with the lung diseases validation dataset.
 
 First, load the trained model and create a predictor.
 
+- 2) Draw prediction on image
 
-
-       2) Draw prediction on image
-
+```
 from detectron2.utils.visualizer import ColorMode
 dataset_dicts = get_dieases_dicts("/content/gdrive/My Drive/colab_data/val", "val.json")
 for d in random.sample(dataset_dicts, 3):    
@@ -228,16 +228,17 @@ for d in random.sample(dataset_dicts, 3):
     )
     v = v.draw_instance_predictions(outputs["instances"].to("cpu"))
     cv2_imshow(v.get_image()[:, :, ::-1])
-
+```
 This shows the predicted results for any of the 3 images.
 
-       3) Test the model
-
+- 3) Test the model
+```
 from detectron2.evaluation import COCOEvaluator, inference_on_dataset
 from detectron2.data import build_detection_test_loader
 evaluator = COCOEvaluator("diseases/val", cfg, False, output_dir="/content/gdrive/My Drive/colab_data/output/")
 val_loader = build_detection_test_loader(cfg, "diseases/val")
 inference_on_dataset(trainer.model, val_loader, evaluator)
-
+```
 [references]
+ Detectron2 tutorial: (https://colab.research.google.com/github/visionNoob/detectron2_aihub_tutorial/blob/master/Detectron2_Tutorial_(kor_ver).ipynb)
  Use Custom Datasets: (https://detectron2.readthedocs.io/tutorials/datasets.html)
