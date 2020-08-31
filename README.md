@@ -1,4 +1,7 @@
 # AI Application
+- Hyojung Chang
+- Jonggeun Park
+- Minjoo Lee
 
 This is an AI application that diagnoses lung diseases (cancer, nodules, covid-19 pneumonia).
 Comparing the model using the PyTorch library and the model using the detectron2, we selected the first model with high accuracy.
